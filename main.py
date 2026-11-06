@@ -13,6 +13,8 @@ arg0_re = re.compile(r"arg0 == (\d+)")
 ch1_re = re.compile(r"scr_84_get_lang_string\(\"(.+)\"\)")
 ch_name_re = re.compile(r"stringset(?:sub)?loc\(\"(.+)\",(?:.*)\)")
 idsarr_re = re.compile(r"scr_room\(([\w_]+), (\d+)")
+sanctuary_re = re.compile(r"roomname\s*=\s*([\w.]+)\s*;")
+field_re = re.compile(r'roomname\s*=\s*"([\x20-\x7e]*\S[\x20-\x7e]*)"\s*;')
 
 def parse_args():
     parser = argparse.ArgumentParser(
@@ -70,11 +72,13 @@ def process_scr_roomname(data:Path,rawdata:str) -> dict[int, str]:
         if REPLACER in line:
             l.debug(f"replacing {REPLACER} with '{room_data[-1]}'")
             line = line.replace(REPLACER,room_data[-1])
+        # arg0 == ?
         arg0_match = arg0_re.search(line)
         if arg0_match:
             l.debug("arg0_match")
             current_id = int(arg0_match.group(1))
             continue
+        # scr_84_get_lang_string
         ch1_match = ch1_re.search(line)
         if ch1_match:
             l.debug("ch1_match")
@@ -86,6 +90,7 @@ def process_scr_roomname(data:Path,rawdata:str) -> dict[int, str]:
             if room_name is not None:
                 room_data[current_id] = room_name
                 current_id = -1
+        # stringset(sub)loc
         ch_name_match = ch_name_re.search(line)
         if ch_name_match:
             l.debug("ch_name_watch")
@@ -93,6 +98,24 @@ def process_scr_roomname(data:Path,rawdata:str) -> dict[int, str]:
             if room_name is not None:
                 room_data[current_id] = room_name
                 current_id = -1
+        # roomname = church_name_c;
+        sanctuary_match = sanctuary_re.search(line)
+        if sanctuary_match:
+            if current_id == -1:
+                l.warning(f"warn no current id while at ch4 sanctuary str\n{neighbors(lines,i)}")
+                continue
+            room_data[current_id] = room_data[-1]
+            current_id = -1
+            pass
+        # roomname = "Field - Maze of Death"
+        field_match = field_re.search(line)
+        if field_match:
+            if current_id == -1:
+                l.warning(f"warn no current id while at field MoD str\n{neighbors(lines,i)}")
+                continue
+            room_data[current_id] = field_match.group(1)
+            current_id = -1
+
     room_data.pop(-1,None)
     return room_data
 
